@@ -10,27 +10,27 @@ defmodule EctoGQL.Resolver do
     end
   end
 
-  def resolve_multiple(module, _parent, args, resolution) do
+  def resolve_multiple(module, parent, args, resolution) do
     ensure_root_query(resolution)
 
     child_fields =
       Absinthe.Resolution.project(resolution)
       |> Enum.map(&selection_id/1)
 
-    setup_query(child_fields, module, args)
+    setup_query(child_fields, module, parent, args, resolution)
     |> module.__repo__().all()
     |> Enum.map(&run_mutations(&1, child_fields, module))
     |> send_result(:ok)
   end
 
-  def resolve_single(module, _parent, args, resolution) do
+  def resolve_single(module, parent, args, resolution) do
     ensure_root_query(resolution)
 
     child_fields =
       Absinthe.Resolution.project(resolution)
       |> Enum.map(&selection_id/1)
 
-    setup_query(child_fields, module, args)
+    setup_query(child_fields, module, parent, args, resolution)
     |> limit(2)
     |> module.__repo__().all()
     |> case do
@@ -40,7 +40,7 @@ defmodule EctoGQL.Resolver do
     end
   end
 
-  def resolve_connection(module, _parent, args, resolution) do
+  def resolve_connection(module, parent, args, resolution) do
     ensure_root_query(resolution)
 
     child_fields =
@@ -49,7 +49,7 @@ defmodule EctoGQL.Resolver do
         {:ok, field} -> Enum.map(field.selections, &selection_id/1)
       end
 
-    query = setup_query(child_fields, module, args)
+    query = setup_query(child_fields, module, parent, args, resolution)
 
     query
     # TODO: configurable repo options (maximum_limit, limit etc)
@@ -79,17 +79,17 @@ defmodule EctoGQL.Resolver do
     end)
   end
 
-  defp setup_query(child_fields, module, args) do
+  defp setup_query(child_fields, module, parent, args, resolution) do
     query =
       module.__schema__()
       |> apply_order_by(args[:order_by])
 
     Enum.reduce(child_fields, query, fn field, query ->
       Map.get(module.__query_mutations__(), field, [])
-      |> Enum.reduce(query, &call_query_mutator(&1, &2, args))
+      |> Enum.reduce(query, &call_query_mutator(&1, &2, parent, args, resolution))
     end)
-    |> global_query_mutations(module, args)
-    |> handle_query_arguments(module, args)
+    |> global_query_mutations(module, parent, args, resolution)
+    |> handle_query_arguments(module, parent, args, resolution)
   end
 
   defp apply_order_by(query, nil) do
@@ -109,12 +109,12 @@ defmodule EctoGQL.Resolver do
     order_by(query, ^order_bys)
   end
 
-  defp global_query_mutations(query, module, args) do
+  defp global_query_mutations(query, module, parent, args, resolution) do
     Map.get(module.__query_mutations__(), :__global, [])
-    |> Enum.reduce(query, &call_query_mutator(&1, &2, args))
+    |> Enum.reduce(query, &call_query_mutator(&1, &2, parent, args, resolution))
   end
 
-  defp handle_query_arguments(query, module, args) do
+  defp handle_query_arguments(query, module, _parent, args, _resolution) do
     Enum.reduce(args, query, fn {name, value}, query ->
       module.handle_argument(name, query, value)
     end)
@@ -139,11 +139,18 @@ defmodule EctoGQL.Resolver do
     end)
   end
 
-  defp call_query_mutator(mutator, query, _args) when is_function(mutator, 1) do
+  defp call_query_mutator(mutator, query, _parent, _args, _resolution)
+       when is_function(mutator, 1) do
     mutator.(query)
   end
 
-  defp call_query_mutator(mutator, query, args) when is_function(mutator, 2) do
+  defp call_query_mutator(mutator, query, _parent, args, _resolution)
+       when is_function(mutator, 2) do
     mutator.(query, args)
+  end
+
+  defp call_query_mutator(mutator, query, parent, args, resolution)
+       when is_function(mutator, 4) do
+    mutator.(query, parent, args, resolution)
   end
 end
