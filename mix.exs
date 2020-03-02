@@ -21,7 +21,8 @@ defmodule EctoGQL.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto_sql, "~> 3.1"},
+      {:ecto, "~> 3.3"},
+      {:ecto_sql, "~> 3.3"},
       {:absinthe, "~> 1.4"},
       {:paginator, github: "duffelhq/paginator", ref: "6740061bf629e4d7a460d581a390b52f3bebf76c"}
     ]
