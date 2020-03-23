@@ -91,7 +91,7 @@ defmodule EctoGQL.Resolver do
   defp setup_query(child_fields, module, parent, args, resolution) do
     query =
       module.__schema__()
-      |> apply_order_by(args[:order_by])
+      |> apply_order_by(module, args[:order_by])
 
     Enum.reduce(child_fields, query, fn field, query ->
       Map.get(module.__query_mutations__(), field, [])
@@ -101,15 +101,20 @@ defmodule EctoGQL.Resolver do
     |> handle_query_arguments(module, parent, args, resolution)
   end
 
-  defp apply_order_by(query, nil) do
-    order_by(query, desc: :id)
+  defp apply_order_by(module, query, nil) do
+    default_order_args =
+      for key <- module.__schema__(:primary_key) do
+        {:desc, key}
+      end
+
+    order_by(query, ^default_order_args)
   end
 
-  defp apply_order_by(query, []) do
-    apply_order_by(query, nil)
+  defp apply_order_by(module, query, []) do
+    apply_order_by(module, query, nil)
   end
 
-  defp apply_order_by(query, order_bys) do
+  defp apply_order_by(_module, query, order_bys) do
     order_bys =
       Enum.map(order_bys, fn %{field: field, direction: direction} ->
         {direction, field |> Macro.underscore() |> String.to_existing_atom()}
