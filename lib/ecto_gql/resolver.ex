@@ -103,7 +103,7 @@ defmodule EctoGQL.Resolver do
 
   defp apply_order_by(query, module, nil) do
     default_order_args =
-      for key <- module.__schema__(:primary_key) do
+      for key <- module.__schema__().__schema__(:primary_key) do
         {:desc, key}
       end
 
