@@ -3,6 +3,7 @@ defmodule EctoGQL.Query do
 
   defmacro __using__(_) do
     env = __CALLER__
+    Module.register_attribute(env.module, :prechecks, accumulate: true)
     Module.register_attribute(env.module, :query_mutations, accumulate: true)
     Module.register_attribute(env.module, :result_mutations, accumulate: true)
     Module.register_attribute(env.module, :argument_handlers, accumulate: true)
@@ -145,6 +146,10 @@ defmodule EctoGQL.Query do
     set_module_attr({field, mutate_fn}, :result_mutations, env)
   end
 
+  defp add_precheck(env, precheck_fn) do
+    set_module_attr(precheck_fn, :prechecks, env)
+  end
+
   defmacro mutate_query(field, mutate_fn) do
     add_query_mutation(__CALLER__, field, mutate_fn)
   end
@@ -159,6 +164,23 @@ defmodule EctoGQL.Query do
 
   defmacro mutate_result(mutate_fn) do
     add_result_mutation(__CALLER__, :__global, mutate_fn)
+  end
+
+  defmacro has_access(check_fn) do
+    add_precheck(
+      __CALLER__,
+      quote do
+        fn parent, args, resolution ->
+          case unquote(check_fn).(parent, args, resolution) do
+            false ->
+              {:error, "Access is not allowed!"}
+
+            true ->
+              :continue
+          end
+        end
+      end
+    )
   end
 
   defmacro filters(field, filter_list) do
@@ -194,6 +216,8 @@ defmodule EctoGQL.Query do
   end
 
   defmacro __before_compile__(env) do
+    prechecks = get_module_attr(env, :prechecks, [])
+
     query_mutations =
       get_module_attr(env, :query_mutations, [])
       |> Enum.group_by(fn {key, _value} -> key end, fn {_key, value} -> value end)
@@ -213,19 +237,23 @@ defmodule EctoGQL.Query do
 
     quote do
       def resolve_all(parent, args, resolution) do
-        EctoGQL.Resolver.resolve_multiple(__MODULE__, parent, args, resolution)
+        EctoGQL.Resolver.resolve(:multiple, __MODULE__, parent, args, resolution)
       end
 
       def resolve_single(parent, args, resolution) do
-        EctoGQL.Resolver.resolve_single(__MODULE__, parent, args, resolution)
+        EctoGQL.Resolver.resolve(:single, __MODULE__, parent, args, resolution)
       end
 
       def resolve_connection(parent, args, resolution) do
-        EctoGQL.Resolver.resolve_connection(__MODULE__, parent, args, resolution)
+        EctoGQL.Resolver.resolve(:connection, __MODULE__, parent, args, resolution)
       end
 
       def __schema__() do
         @schema
+      end
+
+      def __prechecks__() do
+        %{unquote_splicing(prechecks)}
       end
 
       def __query_mutations__() do

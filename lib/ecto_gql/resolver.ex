@@ -10,9 +10,22 @@ defmodule EctoGQL.Resolver do
     end
   end
 
-  def resolve_multiple(module, parent, args, resolution) do
+  def resolve(type, module, parent, args, resolution) do
     ensure_root_query(resolution)
 
+    case run_prechecks(module, parent, args, resolution) do
+      {:ok, _value} = value ->
+        value
+
+      {:error, _message} = value ->
+        value
+
+      :continue ->
+        fetch_results(type, module, parent, args, resolution)
+    end
+  end
+
+  defp fetch_results(:multiple, module, parent, args, resolution) do
     child_fields =
       Absinthe.Resolution.project(resolution)
       |> Enum.map(&selection_id/1)
@@ -23,9 +36,7 @@ defmodule EctoGQL.Resolver do
     |> send_result(:ok)
   end
 
-  def resolve_single(module, parent, args, resolution) do
-    ensure_root_query(resolution)
-
+  defp fetch_results(:single, module, parent, args, resolution) do
     child_fields =
       Absinthe.Resolution.project(resolution)
       |> Enum.map(&selection_id/1)
@@ -40,9 +51,7 @@ defmodule EctoGQL.Resolver do
     end
   end
 
-  def resolve_connection(module, parent, args, resolution) do
-    ensure_root_query(resolution)
-
+  defp fetch_results(:connection, module, parent, args, resolution) do
     child_fields =
       case find_selection_by_path(resolution, [:edges, :node]) do
         {:error, _} -> []
@@ -124,6 +133,25 @@ defmodule EctoGQL.Resolver do
     result
     |> run_global_mutations(module)
     |> run_field_mutations(child_fields, module)
+  end
+
+  defp run_prechecks(module, parent, args, resolution) do
+    module.__prechecks__()
+    |> handle_prechecks(module, parent, args, resolution)
+  end
+
+  defp handle_prechecks([check | rest_checks], module, parent, args, resolution) do
+    case check.(parent, args, resolution) do
+      :continue ->
+        handle_prechecks(rest_checks, module, parent, args, resolution)
+
+      other ->
+        other
+    end
+  end
+
+  defp handle_prechecks([], _module, _parent, _args, _resolution) do
+    :continue
   end
 
   defp run_global_mutations(result, module) do
