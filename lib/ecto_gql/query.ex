@@ -253,7 +253,7 @@ defmodule EctoGQL.Query do
       end
 
       def __prechecks__() do
-        %{unquote_splicing(prechecks)}
+        unquote(prechecks)
       end
 
       def __query_mutations__() do
