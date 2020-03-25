@@ -183,35 +183,26 @@ defmodule EctoGQL.Query do
     )
   end
 
-  defmacro filters(field, filter_list) do
-    f = Enum.map(filter_list, fn f -> add_filter(__CALLER__, field, f) end)
-
-    quote do
-      unquote(f)
+  defmacro filter(filter_name, field_name, filter_fn) do
+    add_filter(__CALLER__, filter_name, field_name, filter_fn)
     end
+
+  defmacro filter(filter_name, field_name, type, filter_fn) do
+    add_filter(__CALLER__, filter_name, field_name, filter_fn, type)
   end
 
-  defmacro filters(field, type, filter_list) do
-    f = Enum.map(filter_list, fn f -> add_filter(__CALLER__, field, f, type) end)
-
-    quote do
-      unquote(f)
-    end
-  end
-
-  defp add_filter(env, field, filter, type \\ nil) do
-    argument_name = EctoGQL.Filters.Helpers.filter_name(filter, field)
-    type = type || get_ecto_type(get_schema(env), field)
+  defp add_filter(env, filter_name, field_name, filter_fn, type \\ nil) do
+    type = type || get_ecto_type(get_schema(env), field_name)
 
     if !type do
-      raise "Field #{inspect(field)} does not exist in the database schema. Make sure the field exists and is not virtual."
+      raise "Field #{inspect(field_name)} does not exist in the database schema. Make sure the field exists and is not virtual."
     end
 
-    handler = EctoGQL.Arguments.create_argument_handler(argument_name, filter, field)
-    set_module_attr({argument_name, handler}, :argument_handlers, env)
+    handler = EctoGQL.Arguments.create_argument_handler(filter_name, filter_fn, field_name)
+    set_module_attr({filter_name, handler}, :argument_handlers, env)
 
     quote do
-      Absinthe.Schema.Notation.arg(unquote(argument_name), unquote(type))
+      Absinthe.Schema.Notation.arg(unquote(filter_name), unquote(type))
     end
   end
 
