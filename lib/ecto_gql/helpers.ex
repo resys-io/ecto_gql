@@ -1,4 +1,6 @@
 defmodule EctoGQL.Helpers do
+  require Absinthe.Schema.Notation
+
   def get_module_attr(env, name, default \\ nil) do
     Module.get_attribute(env.module, name, default)
   end
@@ -16,6 +18,7 @@ defmodule EctoGQL.Helpers do
     |> Map.fetch!(name)
     |> case do
       :map -> :json
+      {:array, type} -> Absinthe.Schema.Notation.list_of(type)
       other -> other
     end
   end
