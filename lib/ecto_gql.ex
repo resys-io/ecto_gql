@@ -31,13 +31,13 @@ defmodule EctoGQL do
     do_arg(name, type, [])
   end
 
-  defmacro arg(name, opts_or_type) do
-    if is_atom(opts_or_type) do
-      do_arg(name, opts_or_type, [])
-    else
-      type = get_gql_type(get_schema(__CALLER__), name)
-      do_arg(name, type, opts_or_type)
-    end
+  defmacro arg(name, opts) when is_list(opts) do
+    type = get_gql_type(get_schema(__CALLER__), name)
+    do_arg(name, type, opts)
+  end
+
+  defmacro arg(name, type) do
+    do_arg(name, type, [])
   end
 
   defmacro arg(name, type, opts) do
