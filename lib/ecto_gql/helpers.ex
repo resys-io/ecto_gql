@@ -18,7 +18,8 @@ defmodule EctoGQL.Helpers do
     |> Map.fetch!(name)
     |> case do
       :map -> :json
-      {:array, type} -> Absinthe.Schema.Notation.list_of(type)
+      # Macro.escape since this value will be used in a quoted expression
+      {:array, type} -> Macro.escape(Absinthe.Schema.Notation.list_of(type))
       other -> other
     end
   end
